@@ -36,8 +36,9 @@ impl DesktopEntry {
 
     fn run(&self) {
         let desktop_file = self.to_string();
-        let user = std::env::var("SUDO_USER").expect("Failed to get the current user");
-        println!("User: {:?}", user);
+
+        // Get the current user's username using the whoami crate or environment variable
+        let user = std::env::var("SUDO_USER").unwrap_or_else(|_| std::env::var("USER").expect("Failed to get the current user"));
         let path = PathBuf::from(format!("/home/{}/.local/share/applications/", user));
         let file_name = format!("{}.desktop", self.name);
         let file_path = path.join(file_name);
@@ -48,20 +49,36 @@ impl DesktopEntry {
 
         std::fs::write(&file_path, desktop_file).expect("Unable to write file");
         println!("Desktop entry created at: {:?}", file_path);
+
+        // Run the update-desktop-database command
+        let output = std::process::Command::new("update-desktop-database")
+            .arg("~/.local/share/applications/")
+            .output()
+            .expect("Failed to execute update-desktop-database");
+
+        if output.status.success() {
+            println!("Successfully updated desktop database.");
+        } else {
+            eprintln!(
+                "Failed to update desktop database: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 }
 
 fn cli() -> Command {
     Command::new("desk")
         .about("A command line tool to create .desktop files")
-        .arg(arg!(path: [PATH])
+        .arg(arg!(-p <PATH>)
             .help("Path to the .desktop file")
             .required(true)
-            .index(1)
+            // .index(1)
             .value_parser(clap::value_parser!(PathBuf))) // Ensure path is parsed as PathBuf
         .arg(arg!(-n --name <NAME>)
             .help("Name of the application")
             .required(false))
+
         .arg(arg!(-i --icon <ICON>)
             .help("Path to the icon file")
             .required(false))
